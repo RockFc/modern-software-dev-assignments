@@ -8,8 +8,13 @@ load_dotenv()
 NUM_RUNS_TIMES = 5
 
 # TODO: Fill this in!
-YOUR_SYSTEM_PROMPT = ""
+#YOUR_SYSTEM_PROMPT = "Assume you are a calculator and perform the following calculations: 1. First, calculate 3 to the power of 12345; 2. Then, take the result from the previous step modulo 100; 3. After completing the calculation, output only: Answer: [calculated result]."
 
+YOUR_SYSTEM_PROMPT = """
+Solve this problem, then give the final answer on the last line as "Answer: <number>".
+what is 3^{12345} (mod 100)?
+think step by step
+"""
 
 USER_PROMPT = """
 Solve this problem, then give the final answer on the last line as "Answer: <number>".

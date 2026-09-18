@@ -7,7 +7,7 @@ load_dotenv()
 NUM_RUNS_TIMES = 5
 
 # TODO: Fill this in!
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = "You reverse the letters of a single word.Rules:- Reverse character by character from end to start.- Keep the same letters; do not add, delete, or invent letters.- Output ONLY the reversed word. No spaces, no punctuation, no explanation.Examples:input: hello,output: olleh,input: cat,output: tac,input: status,output: sutats,input: http,output: ptth,input: abcde,output: edcba"
 
 USER_PROMPT = """
 Reverse the order of letters in the following word. Only output the reversed word, no other text:

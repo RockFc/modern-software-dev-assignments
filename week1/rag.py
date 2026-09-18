@@ -37,7 +37,20 @@ QUESTION = (
 
 
 # TODO: Fill this in!
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """
+You are a coding assistant.
+Use ONLY the Context provided in the user message.
+Do not invent APIs, URLs, or headers.
+
+Write a Python function that:
+- calls the documented API with requests.get
+- uses the documented Base URL and /users/ endpoint
+- sends the X-API-Key header
+- raises on non-200 responses
+- returns only the user's name string
+
+Output exactly one fenced Python code block. No explanation outside the code.
+"""
 
 
 # For this simple example
@@ -56,7 +69,7 @@ def YOUR_CONTEXT_PROVIDER(corpus: List[str]) -> List[str]:
 
     For example, return [] to simulate missing context, or [corpus[0]] to include the API docs.
     """
-    return []
+    return [corpus[0]]
 
 
 def make_user_prompt(question: str, context_docs: List[str]) -> str:

@@ -7,12 +7,16 @@
     <style>
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin: 2rem auto; max-width: 800px; padding: 0 1rem; }
       h1 { font-size: 1.5rem; }
+      h2 { font-size: 1.125rem; margin-top: 1.5rem; }
       textarea { width: 100%; min-height: 160px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; }
-      button { padding: 0.5rem 1rem; }
+      button { padding: 0.5rem 1rem; cursor: pointer; }
       .items { margin-top: 1rem; }
       .item { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; }
       .muted { color: #6b7280; font-size: 0.875rem; }
-      .row { display: flex; gap: 0.5rem; align-items: center; }
+      .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+      .error { color: #b91c1c; }
+      .note { border-top: 1px solid #e5e7eb; padding: 0.75rem 0; }
+      .note pre { white-space: pre-wrap; margin: 0.35rem 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size: 0.875rem; }
     </style>
   </head>
   <body>
@@ -24,51 +28,112 @@
     <div class="row">
       <label class="row"><input id="save_note" type="checkbox" checked /> Save as note</label>
       <button id="extract">Extract</button>
+      <!-- BEGIN AI-generated: Extract LLM + List Notes buttons (TODO 4) -->
+      <button id="extract-llm">Extract LLM</button>
+      <button id="list-notes">List Notes</button>
+      <!-- END AI-generated: Extract LLM + List Notes buttons (TODO 4) -->
     </div>
 
     <div class="items" id="items"></div>
 
+    <!-- BEGIN AI-generated: notes list panel (TODO 4) -->
+    <h2>Saved notes</h2>
+    <div id="notes" class="muted">Click "List Notes" to load saved notes.</div>
+    <!-- END AI-generated: notes list panel (TODO 4) -->
+
     <script>
       const $ = (sel) => document.querySelector(sel);
       const itemsEl = $('#items');
-      const btn = $('#extract');
-      btn.addEventListener('click', async () => {
+      const notesEl = $('#notes');
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;');
+      }
+
+      async function readErrorDetail(res) {
+        try {
+          const body = await res.json();
+          if (body && body.detail) {
+            return typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+          }
+        } catch (_) { /* ignore non-JSON error bodies */ }
+        return `Request failed (${res.status})`;
+      }
+
+      function renderChecklist(items) {
+        if (!items || items.length === 0) {
+          itemsEl.innerHTML = '<p class="muted">No action items found.</p>';
+          return;
+        }
+        itemsEl.innerHTML = items.map(it => (
+          `<div class="item"><input type="checkbox" data-id="${it.id}" /> <span>${escapeHtml(it.text)}</span></div>`
+        )).join('');
+        itemsEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          cb.addEventListener('change', async (e) => {
+            const id = e.target.getAttribute('data-id');
+            await fetch(`/action-items/${id}/done`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ done: e.target.checked }),
+            });
+          });
+        });
+      }
+
+      async function extractFrom(endpoint, pendingLabel) {
         const text = $('#text').value;
         const save = $('#save_note').checked;
-        itemsEl.textContent = 'Extracting...';
+        itemsEl.textContent = pendingLabel;
         try {
-          const res = await fetch('/action-items/extract', {
+          const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, save_note: save }),
           });
-          if (!res.ok) throw new Error('Request failed');
+          if (!res.ok) throw new Error(await readErrorDetail(res));
           const data = await res.json();
-          if (!data.items || data.items.length === 0) {
-            itemsEl.innerHTML = '<p class="muted">No action items found.</p>';
-            return;
-          }
-          itemsEl.innerHTML = data.items.map(it => (
-            `<div class="item"><input type="checkbox" data-id="${it.id}" /> <span>${it.text}</span></div>`
-          )).join('');
-          itemsEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-            cb.addEventListener('change', async (e) => {
-              const id = e.target.getAttribute('data-id');
-              await fetch(`/action-items/${id}/done`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ done: e.target.checked }),
-              });
-            });
-          });
+          renderChecklist(data.items);
         } catch (err) {
           console.error(err);
-          itemsEl.textContent = 'Error extracting items';
+          itemsEl.innerHTML = `<p class="error">${escapeHtml(err.message || 'Error extracting items')}</p>`;
         }
+      }
+
+      $('#extract').addEventListener('click', () => {
+        extractFrom('/action-items/extract', 'Extracting...');
       });
 
+      // BEGIN AI-generated: Extract LLM + List Notes handlers (TODO 4)
+      $('#extract-llm').addEventListener('click', () => {
+        extractFrom('/action-items/extract-llm', 'Extracting with LLM...');
+      });
+
+      $('#list-notes').addEventListener('click', async () => {
+        notesEl.textContent = 'Loading notes...';
+        try {
+          const res = await fetch('/notes');
+          if (!res.ok) throw new Error(await readErrorDetail(res));
+          const notes = await res.json();
+          if (!notes.length) {
+            notesEl.innerHTML = '<p class="muted">No saved notes yet.</p>';
+            return;
+          }
+          notesEl.innerHTML = notes.map(n => (
+            `<div class="note">` +
+              `<div class="muted">#${n.id} · ${escapeHtml(n.created_at)}</div>` +
+              `<pre>${escapeHtml(n.content)}</pre>` +
+            `</div>`
+          )).join('');
+        } catch (err) {
+          console.error(err);
+          notesEl.innerHTML = `<p class="error">${escapeHtml(err.message || 'Error loading notes')}</p>`;
+        }
+      });
+      // END AI-generated: Extract LLM + List Notes handlers (TODO 4)
     </script>
   </body>
   </html>
-
-

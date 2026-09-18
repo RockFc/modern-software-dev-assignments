@@ -70,7 +70,20 @@ TOOL_REGISTRY: Dict[str, Callable[..., str]] = {
 # ==========================
 
 # TODO: Fill this in!
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = '''
+You are a tool-calling assistant.
+When asked to call the tool, reply with ONLY one JSON object.
+No explanation, no markdown, no extra text.
+
+Required output (copy this structure exactly):
+{"tool":"output_every_func_return_type","args":{"file_path":""}}
+
+Important:
+- "tool" must be exactly: output_every_func_return_type
+- "args" must be a JSON object
+- "file_path" must be an empty string "" - do NOT invent a path
+- Never use placeholders like path_to_your_file.py or file_path
+'''
 
 
 def resolve_path(p: str) -> str:

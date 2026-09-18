@@ -1,28 +1,34 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
-from typing import Optional
+from contextlib import contextmanager
+from typing import Iterator, Optional
 
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "app.db"
+# --- BEGIN AI-generated: DB layer cleanup (TODO 3 refactor) ---
+from .config import DB_PATH
 
 
 def ensure_data_directory_exists() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
-def get_connection() -> sqlite3.Connection:
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
+    """Open a SQLite connection with Row factory; auto-commit/rollback on exit."""
     ensure_data_directory_exists()
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
-    return connection
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def init_db() -> None:
-    ensure_data_directory_exists()
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
@@ -46,14 +52,12 @@ def init_db() -> None:
             );
             """
         )
-        connection.commit()
 
 
 def insert_note(content: str) -> int:
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute("INSERT INTO notes (content) VALUES (?)", (content,))
-        connection.commit()
         return int(cursor.lastrowid)
 
 
@@ -71,8 +75,7 @@ def get_note(note_id: int) -> Optional[sqlite3.Row]:
             "SELECT id, content, created_at FROM notes WHERE id = ?",
             (note_id,),
         )
-        row = cursor.fetchone()
-        return row
+        return cursor.fetchone()
 
 
 def insert_action_items(items: list[str], note_id: Optional[int] = None) -> list[int]:
@@ -85,7 +88,6 @@ def insert_action_items(items: list[str], note_id: Optional[int] = None) -> list
                 (note_id, item),
             )
             ids.append(int(cursor.lastrowid))
-        connection.commit()
         return ids
 
 
@@ -104,13 +106,25 @@ def list_action_items(note_id: Optional[int] = None) -> list[sqlite3.Row]:
         return list(cursor.fetchall())
 
 
-def mark_action_item_done(action_item_id: int, done: bool) -> None:
+def get_action_item(action_item_id: int) -> Optional[sqlite3.Row]:
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT id, note_id, text, done, created_at FROM action_items WHERE id = ?",
+            (action_item_id,),
+        )
+        return cursor.fetchone()
+
+
+def mark_action_item_done(action_item_id: int, done: bool) -> bool:
+    """Return True if a row was updated, False if the action item does not exist."""
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
             "UPDATE action_items SET done = ? WHERE id = ?",
             (1 if done else 0, action_item_id),
         )
-        connection.commit()
+        return cursor.rowcount > 0
 
 
+# --- END AI-generated: DB layer cleanup (TODO 3 refactor) ---

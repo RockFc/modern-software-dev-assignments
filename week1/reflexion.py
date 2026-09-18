@@ -15,7 +15,11 @@ Keep the implementation minimal.
 """
 
 # TODO: Fill this in!
-YOUR_REFLEXION_PROMPT = ""
+YOUR_REFLEXION_PROMPT = """
+You are a coding assistant. Output ONLY a single fenced Python code block that defines
+the function is_valid_password(password: str) -> bool. No prose or comments.
+Keep the implementation minimal.Then critique your answer. Was it correct? If not, fix and try again.
+"""
 
 
 # Ground-truth test suite used to evaluate generated code
@@ -90,14 +94,15 @@ def generate_initial_function(system_prompt: str) -> str:
     )
     return extract_code_block(response.message.content)
 
-
 def your_build_reflexion_context(prev_code: str, failures: List[str]) -> str:
-    """TODO: Build the user message for the reflexion step using prev_code and failures.
+    failures_text = "\n".join(failures)
+    return f"""Previous code:
+{prev_code}
 
-    Return a string that will be sent as the user content alongside the reflexion system prompt.
-    """
-    return ""
+Test failures:
+{failures_text}
 
+Fix is_valid_password so all tests pass. Output ONLY one fenced Python code block."""
 
 def apply_reflexion(
     reflexion_prompt: str,

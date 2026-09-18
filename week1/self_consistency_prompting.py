@@ -9,7 +9,15 @@ load_dotenv()
 NUM_RUNS_TIMES = 5
 
 # TODO: Fill this in! Try to get as close to 100% correctness across all runs as possible.
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """
+Solve this problem, then give the final answer on the last line as "Answer: <number>".
+
+Henry made two stops during his 60-mile bike trip. He first stopped after 20
+miles. His second stop was 15 miles before the end of the trip. How many miles
+did he travel between his first and second stops?
+Sample multiple times from output (typically with CoT) and aggregate most common
+results.
+"""
 
 USER_PROMPT = """
 Solve this problem, then give the final answer on the last line as "Answer: <number>".
