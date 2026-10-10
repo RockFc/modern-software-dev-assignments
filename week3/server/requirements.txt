@@ -1,0 +1,9 @@
+# Requires Python >= 3.10 (the mcp SDK does not support older versions).
+# 需要 Python >= 3.10（mcp SDK 不支持更低版本）。
+# 官方 MCP SDK，提供 FastMCP（握手、工具注册、JSON-RPC 编解码、STDIO 传输）。
+mcp>=1.9,<2
+# [socks] lets httpx honor ALL_PROXY=socks5://... if the host sets it.
+# 异步 HTTP 客户端，用于调用 Open-Meteo；[socks] 使其支持 socks5 代理。
+httpx[socks]>=0.27,<1
+# 参数校验，FastMCP 用它把函数签名转换为工具的 JSON Schema。
+pydantic>=2.7,<3
