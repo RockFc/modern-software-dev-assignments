@@ -1,9 +1,9 @@
-"""Open-Meteo weather MCP server (STDIO transport only).
+"""Open-Meteo weather MCP server (STDIO + optional HTTP).
 
-stdout carries the JSON-RPC stream, so all logging goes to stderr.
+stdout carries the JSON-RPC stream in STDIO mode, so all logging goes to stderr.
 
 【中文说明】本文件是 MCP 协议层，只负责“把普通函数暴露成 MCP 工具”。
-整体流程：
+整体流程（STDIO）：
   1. MCP 客户端（如 Cursor）读取 ~/.cursor/mcp.json，把本脚本作为子进程启动，
      并接管它的 stdin / stdout。
   2. 客户端通过 stdin 发送 JSON-RPC 请求：
@@ -13,6 +13,10 @@ stdout carries the JSON-RPC stream, so all logging goes to stderr.
   3. FastMCP 解析请求、校验参数、调用下面用 @mcp.tool() 注册的函数，
      再把返回值序列化成 JSON-RPC 响应写回 stdout。
   4. 真正访问天气 API 的逻辑在 weather.py，本文件不直接发 HTTP 请求。
+
+HTTP（TRANSPORT=http / streamable-http）：同一套工具通过 mcp==1.30 的
+streamable-http 传输暴露在 HOST:PORT（默认 0.0.0.0:8765），路径 /mcp。
+可选 MCP_API_KEY 只校验入站 Authorization: Bearer / x-api-key，不会转发给 Open-Meteo。
 """
 
 from __future__ import annotations
@@ -42,8 +46,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("weather-mcp")
 
+# Host/port are read at construction time so FastMCP does not auto-enable
+# localhost-only DNS-rebinding protection when we intend to bind 0.0.0.0.
+_HOST = os.environ.get("HOST", "0.0.0.0")
+_PORT = int(os.environ.get("PORT", "8765"))
+
 # 创建 MCP 服务器实例。名字会在 initialize 握手时作为 serverInfo 发给客户端。
-mcp = FastMCP("open-meteo-weather")
+mcp = FastMCP("open-meteo-weather", host=_HOST, port=_PORT)
 
 
 # @mcp.tool() 把下面的异步函数注册为一个 MCP 工具，自动生成工具定义：
@@ -97,11 +106,107 @@ async def get_current_weather(
         raise ToolError(str(exc)) from exc
 
 
+def _normalize_transport(raw: str | None) -> str:
+    """Map env TRANSPORT to a FastMCP transport name."""
+    value = (raw or "stdio").strip().lower()
+    if value in ("http", "streamable-http", "streamable_http"):
+        return "streamable-http"
+    if value == "sse":
+        return "sse"
+    return "stdio"
+
+
+class _ApiKeyGate:
+    """ASGI middleware: require Bearer token or x-api-key matching MCP_API_KEY.
+
+    Only gates access to this MCP HTTP app. The key is never forwarded to
+    Open-Meteo (weather.py does not read MCP_API_KEY).
+    """
+
+    def __init__(self, app: Any, api_key: str) -> None:
+        self.app = app
+        self.api_key = api_key
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope["type"] == "http":
+            headers = {
+                k.decode("latin-1").lower(): v.decode("latin-1")
+                for k, v in scope.get("headers", [])
+            }
+            provided: str | None = None
+            auth = headers.get("authorization", "")
+            if auth.lower().startswith("bearer "):
+                provided = auth[7:].strip()
+            elif "x-api-key" in headers:
+                provided = headers["x-api-key"].strip()
+            if provided != self.api_key:
+                body = b'{"error":"unauthorized","hint":"Authorization: Bearer <MCP_API_KEY> or x-api-key"}'
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 401,
+                        "headers": [
+                            (b"content-type", b"application/json"),
+                            (b"www-authenticate", b'Bearer realm="mcp"'),
+                            (b"content-length", str(len(body)).encode("ascii")),
+                        ],
+                    }
+                )
+                await send({"type": "http.response.body", "body": body})
+                return
+        await self.app(scope, receive, send)
+
+
+async def _run_http(transport: str) -> None:
+    """Serve streamable-http or SSE with optional MCP_API_KEY gate."""
+    import uvicorn
+
+    api_key = os.environ.get("MCP_API_KEY")
+    if transport == "sse":
+        app: Any = mcp.sse_app()
+        paths = f"sse={mcp.settings.sse_path} messages={mcp.settings.message_path}"
+    else:
+        app = mcp.streamable_http_app()
+        paths = f"streamable-http={mcp.settings.streamable_http_path}"
+
+    if api_key:
+        logger.info(
+            "MCP_API_KEY is set: requiring Authorization: Bearer <key> or x-api-key "
+            "(key is NOT sent to Open-Meteo)"
+        )
+        app = _ApiKeyGate(app, api_key)
+    else:
+        logger.info("MCP_API_KEY unset: HTTP MCP endpoint is unauthenticated")
+
+    logger.info(
+        "Starting open-meteo-weather MCP HTTP server transport=%s host=%s port=%s %s",
+        transport,
+        mcp.settings.host,
+        mcp.settings.port,
+        paths,
+    )
+    config = uvicorn.Config(
+        app,
+        host=mcp.settings.host,
+        port=mcp.settings.port,
+        log_level=os.environ.get("LOG_LEVEL", "INFO").lower(),
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
 def main() -> None:
-    logger.info("Starting open-meteo-weather MCP server on stdio")
-    # 进入事件循环：持续从 stdin 读取 JSON-RPC 消息、把响应写到 stdout，
-    # 直到客户端关闭管道。改成 transport="streamable-http" 即为远程 HTTP 模式（本项目未实现）。
-    mcp.run(transport="stdio")
+    transport = _normalize_transport(os.environ.get("TRANSPORT"))
+    if transport == "stdio":
+        logger.info("Starting open-meteo-weather MCP server on stdio")
+        # 进入事件循环：持续从 stdin 读取 JSON-RPC 消息、把响应写到 stdout，
+        # 直到客户端关闭管道。
+        mcp.run(transport="stdio")
+        return
+
+    import anyio
+
+    anyio.run(_run_http, transport)
 
 
 if __name__ == "__main__":
