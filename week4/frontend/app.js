@@ -7,7 +7,8 @@ async function fetchJSON(url, options) {
 async function loadNotes() {
   const list = document.getElementById('notes');
   list.innerHTML = '';
-  const notes = await fetchJSON('/notes/');
+  const q = document.getElementById('note-search').value.trim();
+  const notes = await fetchJSON(`/notes/search/?q=${encodeURIComponent(q)}`);
   for (const n of notes) {
     const li = document.createElement('li');
     li.textContent = `${n.title}: ${n.content}`;
@@ -46,6 +47,11 @@ window.addEventListener('DOMContentLoaded', () => {
       body: JSON.stringify({ title, content }),
     });
     e.target.reset();
+    loadNotes();
+  });
+
+  document.getElementById('note-search-form').addEventListener('submit', (e) => {
+    e.preventDefault();
     loadNotes();
   });
 

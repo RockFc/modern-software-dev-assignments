@@ -31,8 +31,9 @@ def search_notes(q: Optional[str] = None, db: Session = Depends(get_db)) -> list
     if not q:
         rows = db.execute(select(Note)).scalars().all()
     else:
+        pattern = f"%{q}%"
         rows = (
-            db.execute(select(Note).where((Note.title.contains(q)) | (Note.content.contains(q))))
+            db.execute(select(Note).where(Note.title.ilike(pattern) | Note.content.ilike(pattern)))
             .scalars()
             .all()
         )
