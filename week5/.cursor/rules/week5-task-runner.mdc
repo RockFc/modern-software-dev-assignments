@@ -1,0 +1,16 @@
+---
+description: Week5 task runner constraints for CS146S starter app
+globs: week5/**
+alwaysApply: false
+---
+
+# Week 5 task runner
+
+- Work only under `week5/`.
+- Starter frontend is static `index.html` + `app.js` (not React) unless Task 1 is explicitly chosen.
+- Collection list endpoints return `{ items, total, page, page_size }`; clamp `page_size` at 100.
+- Register `/notes/search` before `/notes/{note_id}`.
+- Notes need `created_at` for `sort=created_desc`; migrate existing SQLite with ALTER if needed.
+- Search: case-insensitive match on title AND content; sorts `created_desc` | `title_asc`.
+- Difficulty reference: Task 8 = easy (list pagination); Task 2 = medium (search + sort + pagination).
+- Run `make test` from `week5/` with conda env `cs146s` before claiming done.
