@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 load_dotenv()
@@ -38,6 +38,22 @@ def get_session() -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+def ensure_schema_upgrades() -> None:
+    """Best-effort SQLite migrations for existing local DBs."""
+    inspector = inspect(engine)
+    if "notes" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("notes")}
+    if "created_at" not in columns:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE notes ADD COLUMN created_at DATETIME "
+                    "DEFAULT CURRENT_TIMESTAMP NOT NULL"
+                )
+            )
 
 
 def apply_seed_if_needed() -> None:

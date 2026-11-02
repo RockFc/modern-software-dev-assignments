@@ -17,7 +17,22 @@
           <input id="note-content" placeholder="Content" required />
           <button type="submit">Add</button>
         </form>
+        <div class="toolbar">
+          <input id="note-search" placeholder="Search notes..." />
+          <select id="note-sort">
+            <option value="created_desc">Newest first</option>
+            <option value="title_asc">Title A-Z</option>
+          </select>
+          <button type="button" id="note-search-btn">Search</button>
+          <button type="button" id="note-clear-search">Clear</button>
+        </div>
+        <p id="notes-meta" class="meta"></p>
         <ul id="notes"></ul>
+        <div class="pager">
+          <button type="button" id="notes-prev">Prev</button>
+          <span id="notes-page-label"></span>
+          <button type="button" id="notes-next">Next</button>
+        </div>
       </section>
 
       <section>
@@ -26,7 +41,13 @@
           <input id="action-desc" placeholder="Description" required />
           <button type="submit">Add</button>
         </form>
+        <p id="actions-meta" class="meta"></p>
         <ul id="actions"></ul>
+        <div class="pager">
+          <button type="button" id="actions-prev">Prev</button>
+          <span id="actions-page-label"></span>
+          <button type="button" id="actions-next">Next</button>
+        </div>
       </section>
     </main>
 
